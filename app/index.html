@@ -3,90 +3,89 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — GTA-style cover art maker</title>
-<meta name="description" content="Turn your photo and a caption into multi-panel GTA-style cover art with a Vice City sunset grade, then export it as a PNG. Works offline; photos never leave your machine.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a0b2e'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23ffd98a' font-family='sans-serif' font-weight='bold'%3EV%3C/text%3E%3C/svg%3E">
+<title>Vice Cover Studio — your photo, one last summer</title>
+<meta name="description" content="Turn your photos into a dense multi-panel GTA-style sunset cover. Offline, nothing uploaded, export PNG in four post sizes.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="topbar">
-  <h1 class="logo">VICE COVER STUDIO</h1>
-  <span class="logo-sub">your photo, one last summer</span>
-  <span class="privacy-badge">Offline &middot; photos stay on your machine</span>
+  <div class="brand">
+    <h1><span class="brand-vice">VICE COVER</span> <span class="brand-studio">STUDIO</span></h1>
+    <p class="tagline">your photo, one last summer</p>
+  </div>
+  <div class="top-actions">
+    <button id="shuffleBtn" type="button" class="btn shuffle">⟳ Shuffle</button>
+    <span class="offline-badge">OFFLINE · PHOTOS STAY ON YOUR MACHINE</span>
+  </div>
 </header>
 
-<main class="workspace">
-  <aside class="controls">
+<main class="layout">
+  <aside class="sidebar">
     <section class="card">
-      <h2><span class="step">1</span> Photos</h2>
-      <label class="btn" for="uploadInput" style="display:block;text-align:center">+ Add your photos</label>
-      <input type="file" id="uploadInput" accept="image/*" multiple hidden>
-      <p class="hint">Six sample photos are loaded already — click one below to drop it into the selected panel, or add your own. Nothing is uploaded.</p>
-      <button class="btn btn-ghost" id="onePhotoBtn" type="button">One photo in every panel</button>
+      <h2><span class="num">1</span> Photos</h2>
+      <label class="upload-btn" for="fileInput">+ Add your photos</label>
+      <input id="fileInput" type="file" accept="image/*" multiple hidden>
+      <p class="hint">Eight sample photos are loaded already — click one below to drop it into the selected panel, or add your own. Nothing is uploaded.</p>
+      <button id="onePhotoBtn" type="button" class="btn ghost wide">One photo in every panel</button>
+      <div id="sampleStrip" class="sample-strip" aria-label="Sample photos"></div>
     </section>
 
     <section class="card">
-      <h2><span class="step">2</span> Layout</h2>
-      <div class="layout-grid" id="layoutPicker"></div>
+      <h2><span class="num">2</span> Layout</h2>
+      <div id="layoutGrid" class="opt-grid"></div>
     </section>
 
     <section class="card">
-      <h2><span class="step">3</span> Colour grade</h2>
-      <div class="grade-grid" id="gradePicker"></div>
+      <h2><span class="num">3</span> Colour grade</h2>
+      <div id="gradeGrid" class="opt-grid"></div>
     </section>
 
     <section class="card">
-      <h2><span class="step">4</span> Caption</h2>
-      <div class="caption-grid" id="captionPicker"></div>
-      <label class="field" for="titleInput">Title</label>
-      <input type="text" id="titleInput" maxlength="24" value="PALM FEVER" autocomplete="off">
-      <label class="field" for="subtitleInput">Script subtitle</label>
-      <input type="text" id="subtitleInput" maxlength="32" value="one last summer" autocomplete="off">
-      <label class="field" for="taglineInput">Tagline</label>
-      <input type="text" id="taglineInput" maxlength="48" value="FIVE FRIENDS · ONE COAST · NO WAY BACK" autocomplete="off">
-      <label class="field" for="volumeInput">Volume badge</label>
-      <input type="text" id="volumeInput" maxlength="12" value="VOL. 1" autocomplete="off">
+      <h2><span class="num">4</span> Caption</h2>
+      <div id="captionGrid" class="opt-grid"></div>
+      <label class="field-label" for="inTitle">Title (ALL CAPS)</label>
+      <input id="inTitle" class="text-in" type="text" maxlength="24" value="PALM FEVER">
+      <label class="field-label" for="inScript">Script subtitle</label>
+      <input id="inScript" class="text-in" type="text" maxlength="32" value="one last summer">
+      <label class="field-label" for="inTagline">Tagline strip</label>
+      <input id="inTagline" class="text-in" type="text" maxlength="60" value="FIVE FRIENDS · ONE COAST · NO WAY BACK">
+      <label class="field-label" for="inLocation">Location chip</label>
+      <input id="inLocation" class="text-in" type="text" maxlength="40" value="CORAL CAUSEWAY · 7:15 PM">
     </section>
 
     <section class="card">
-      <h2><span class="step">5</span> Selected panel</h2>
-      <div class="panel-head"><span id="panelName">Panel 1</span><button class="mini-btn" id="resetPanelBtn" type="button">Reset framing</button></div>
-      <p class="hint">Click a panel on the cover to select it. Drag it to pan, scroll to zoom.</p>
-      <label class="field" for="labelInput">Panel label</label>
-      <input type="text" id="labelInput" maxlength="18" value="THE CAPTAIN" autocomplete="off">
-      <label class="field" for="zoomSlider">Zoom</label>
+      <h2><span class="num">5</span> Selected panel</h2>
+      <p class="hint" id="panelLabel">Panel 1 of 7</p>
+      <label class="field-label" for="roleSelect">Role label</label>
+      <select id="roleSelect" class="text-in"></select>
+      <p class="hint" id="roleSub"></p>
       <div class="zoom-row">
-        <input type="range" id="zoomSlider" min="100" max="300" value="100">
-        <span id="zoomValue">100%</span>
+        <button id="zoomOutBtn" type="button" class="btn ghost">− Zoom</button>
+        <button id="zoomResetBtn" type="button" class="btn ghost">Reset frame</button>
+        <button id="zoomInBtn" type="button" class="btn ghost">Zoom +</button>
       </div>
+      <p class="hint">Tip: click a panel to select it, drag it to reframe the photo, scroll to zoom.</p>
     </section>
-
-    <button class="btn btn-shuffle" id="shuffleBtn" type="button">🎲 Shuffle — new cover in one click</button>
   </aside>
 
   <section class="stage">
     <div class="stage-head">
       <h2>Live cover preview</h2>
-      <span id="statusLine">Loading sample photos…</span>
+      <p id="status" class="status" role="status">Loading samples…</p>
     </div>
     <div class="canvas-wrap">
-      <canvas id="coverCanvas" width="960" height="540" aria-label="Cover art preview"></canvas>
+      <canvas id="coverCanvas" width="1100" height="619"></canvas>
     </div>
-    <div class="size-row" id="sizePicker" role="group" aria-label="Export size"></div>
+    <div id="sizeRow" class="size-row" aria-label="Export size"></div>
     <div class="export-row">
-      <button class="btn btn-primary" id="exportBtn" type="button">⬇ Export PNG</button>
-      <button class="btn btn-ghost" id="exportAllBtn" type="button">Export all 4 sizes</button>
-      <span id="lastExport"></span>
+      <button id="exportBtn" type="button" class="btn export">⬇ Export PNG</button>
+      <button id="exportAllBtn" type="button" class="btn ghost">Export all 4 sizes</button>
     </div>
-    <div class="photo-strip" id="photoStrip" aria-label="Photo library"></div>
+    <p class="foot-note">7 panels · 8 layouts · 6 grades · 6 caption presets · original art, no Rockstar assets · fonts: Anton, Oswald &amp; Pacifico (SIL OFL).</p>
   </section>
 </main>
 
-<footer class="foot">
-  Vice Cover Studio makes original cover art in the style of GTA 6 posters — multi-panel layouts, bold lettering and a Vice City sunset grade.<br>
-  All lettering, layouts and photos are original. No Rockstar Games logo, artwork or fonts are used. Fonts: Anton, Pacifico and Oswald under the SIL Open Font License.
-</footer>
-
-<script type="module" src="src/main.js"></script>
+<script src="src/cover.js"></script>
+<script src="src/main.js"></script>
 </body>
 </html>

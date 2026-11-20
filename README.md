@@ -4,19 +4,7 @@
 [![rank](https://make.fun/badge/gta6-cover-art-01/saifulsidik801-ship-it/gta6-cover-art-01-entry/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 [![reward](https://make.fun/badge/gta6-cover-art-01/saifulsidik801-ship-it/gta6-cover-art-01-entry/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
-Vice Cover Studio turns your photo and a caption into multi-panel cover art in the style of GTA 6 posters — bold gradient lettering, a neon script subtitle, a Vice City sunset grade — and exports it as a PNG to share. It runs offline in a desktop browser from its own static files: photos never leave your machine.
-
-## What it does
-
-- **6 layouts** — multi-panel poster grids with a pop-out hero that breaks its frame with a white halo outline
-- **4 colour grades** — Vice Sunset, Neon Nights, Golden Hour, Midnight Purple
-- **4 caption presets** — title, script subtitle, tagline, press quote and volume badge, all editable
-- **Any photo** — add your own photos, or use the 6 bundled samples; click a panel to select it, drag to pan, scroll to zoom, re-label every panel, or fill all panels with one photo
-- **Shuffle button** — one click randomises layout, grade, caption and photo order for a fresh cover
-- **PNG export** — 1080 × 1080, 1080 × 1350, 1920 × 1080 and 1080 × 1920, plus export-all-4-sizes
-- **Fully offline** — fonts (Anton, Pacifico, Oswald — SIL Open Font License) and sample photos are bundled under `app/`; no network requests, no uploads
-
-Everything is original: no Rockstar Games logo, official artwork or fonts.
+Vice Cover Studio — a dense multi-panel GTA-style sunset cover maker. Drop in your own photos (or use the 8 bundled samples) and get a poster that looks like the top of the board: 7 photo panels with a white-halo pop-out hero, a giant striped-gradient title that sprawls across the panels, a neon script subtitle, a location chip, a "HOT SUMMER '25" starburst, role labels with location/time sub-lines, a palm-silhouette strip, a catalogue number and a credit footer. 8 layouts × 6 colour grades × 6 caption presets, per-panel zoom/pan by dragging, Shuffle for one-click random covers, and PNG export at 1080×1080, 1080×1350, 1920×1080 and 1080×1920. Fully offline — photos are read on your own machine and never uploaded. Original art throughout: no Rockstar logo, artwork or font; the bundled fonts (Anton, Oswald, Pacifico) are SIL OFL.
 
 ## Run it
 
@@ -24,7 +12,7 @@ Everything is original: no Rockstar Games logo, official artwork or fonts.
 node serve.ts
 ```
 
-Then open http://localhost:8080 — pick a layout, a grade and a caption, drop in a photo, hit **Export PNG**.
+Then open http://localhost:8080 in desktop Chrome. No build step, no install.
 
 ---
 

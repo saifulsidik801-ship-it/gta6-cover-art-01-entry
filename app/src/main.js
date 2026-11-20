@@ -1,488 +1,452 @@
-// Vice Cover Studio — editor wiring.
-// Owns the state, the photo library (bundled samples + user uploads),
-// panel selection with drag-to-pan and wheel zoom, Shuffle, caption
-// presets, live preview and PNG export at four post sizes.
-// Photos are read on this machine only and never uploaded anywhere.
+// Vice Cover Studio — editor wiring (classic script, no modules).
+// State, sample loading, uploads, panel drag pan / wheel zoom, Shuffle,
+// caption editing, role labels and PNG export at four post sizes.
+// Photos are read on this machine only and are never uploaded.
+(function () {
+  'use strict';
 
-import { LAYOUTS, GRADES, CAPTIONS, EXPORT_SIZES, drawCover } from './cover.js';
+  var VC = window.ViceCover;
+  var $ = function (id) { return document.getElementById(id); };
 
-const SAMPLES = [
-  { src: 'samples/sample1.jpg', name: 'Golden Hour', role: 'THE CAPTAIN' },
-  { src: 'samples/sample2.jpg', name: 'White Suit', role: 'THE BOSS' },
-  { src: 'samples/sample3.jpg', name: 'Speedboat', role: 'THE GETAWAY' },
-  { src: 'samples/sample4.jpg', name: 'Beach Party', role: 'THE LOOKOUT' },
-  { src: 'samples/sample5.jpg', name: 'Motel Dusk', role: 'THE COURIER' },
-  { src: 'samples/sample6.jpg', name: 'Boulevard', role: 'THE DRIVER' },
-];
+  var SAMPLE_URLS = [
+    'samples/sample1.jpg', 'samples/sample2.jpg', 'samples/sample3.jpg',
+    'samples/sample4.jpg', 'samples/sample5.jpg', 'samples/sample6.jpg',
+    'samples/sample7.jpg', 'samples/sample8.jpg'
+  ];
 
-const state = {
-  layout: 0,
-  grade: 0,
-  caption: 0,
-  title: CAPTIONS[0].title,
-  subtitle: CAPTIONS[0].subtitle,
-  tagline: CAPTIONS[0].tagline,
-  quote: CAPTIONS[0].quote,
-  quoteSource: CAPTIONS[0].source,
-  volume: 'VOL. 1',
-  size: 'wide',
-  panels: [],
-  selectedPanel: 0,
-};
+  var state = {
+    layout: 0,
+    grade: 0,
+    captionIdx: 0,
+    caption: Object.assign({}, VC.CAPTIONS[0]),
+    sizeIdx: 2, // Wide 1920x1080
+    photos: [],       // HTMLImageElement | null, the library
+    assign: [0, 1, 2, 3, 4, 5, 6], // panel -> library index
+    frames: [],       // per panel { z, x, y }
+    roles: ['THE CAPTAIN', 'THE INSIDER', 'THE RIDER', 'THE BOSS',
+      'THE COURIER', 'THE LOOKOUT', 'THE GETAWAY'],
+    selected: 0
+  };
+  for (var p = 0; p < 7; p++) state.frames.push({ z: 1.12, x: 0, y: 0 });
 
-const photos = [];
-let previewW = 960;
-let previewH = 540;
-let renderQueued = false;
+  var canvas = null, statusEl = null, renderQueued = false;
 
-const $ = (id) => document.getElementById(id);
-const canvas = $('coverCanvas');
-const ctx = canvas.getContext('2d');
+  function setStatus(msg) { if (statusEl) statusEl.textContent = msg; }
 
-function layoutPanels() {
-  return LAYOUTS[state.layout].panels;
-}
-
-function resetPanels(photoOrder) {
-  state.panels = layoutPanels().map((panel, i) => ({
-    photo: photos.length ? photos[photoOrder[i % photoOrder.length]] : null,
-    zoom: 1,
-    ox: 0,
-    oy: 0,
-    label: panel.label,
-  }));
-  state.selectedPanel = LAYOUTS[state.layout].hero;
-}
-
-function queueRender() {
-  if (renderQueued) return;
-  renderQueued = true;
-  requestAnimationFrame(() => {
-    renderQueued = false;
-    renderPreview();
-  });
-}
-
-function renderPreview() {
-  const size = EXPORT_SIZES.find((s) => s.id === state.size) || EXPORT_SIZES[2];
-  const fitW = 960;
-  const fitH = Math.round((fitW * size.h) / size.w);
-  previewW = fitW;
-  previewH = fitH;
-  if (canvas.width !== fitW || canvas.height !== fitH) {
-    canvas.width = fitW;
-    canvas.height = fitH;
+  function coverState() {
+    return {
+      layout: state.layout,
+      grade: state.grade,
+      caption: state.caption,
+      photos: state.assign.map(function (li) { return state.photos[li] || null; }),
+      frames: state.frames,
+      roles: state.roles
+    };
   }
-  drawCover(ctx, state, fitW, fitH);
-  drawSelection();
-  updatePanelInspector();
-}
 
-function drawSelection() {
-  const panel = layoutPanels()[state.selectedPanel];
-  if (!panel) return;
-  ctx.save();
-  ctx.strokeStyle = '#00e5ff';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([10, 6]);
-  ctx.strokeRect(panel.x * previewW + 2, panel.y * previewH + 2, panel.w * previewW - 4, panel.h * previewH - 4);
-  ctx.setLineDash([]);
-  ctx.restore();
-}
-
-function panelAt(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const fx = (clientX - rect.left) / rect.width;
-  const fy = (clientY - rect.top) / rect.height;
-  const panels = layoutPanels();
-  for (let i = panels.length - 1; i >= 0; i--) {
-    const p = panels[i];
-    if (fx >= p.x && fx <= p.x + p.w && fy >= p.y && fy <= p.y + p.h) return i;
+  function previewSize() {
+    var s = VC.SIZES[state.sizeIdx];
+    var maxSide = 1100;
+    var scale = Math.min(1, maxSide / Math.max(s.w, s.h));
+    return { w: Math.round(s.w * scale), h: Math.round(s.h * scale) };
   }
-  return -1;
-}
 
-// ---- Photo library -------------------------------------------------------
-
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Could not load ' + src));
-    img.src = src;
-  });
-}
-
-async function loadSamples() {
-  const loaded = [];
-  for (const s of SAMPLES) {
+  function render() {
+    if (!canvas) return;
+    var ps = previewSize();
     try {
-      const img = await loadImage(s.src);
-      loaded.push(img);
+      VC.drawCover(canvas, coverState(), ps.w, ps.h);
     } catch (err) {
-      console.warn('Sample failed:', s.src, err);
+      setStatus('Render error: ' + err.message);
+      return;
+    }
+    drawSelection();
+    setStatus('Ready — drag any panel to reframe it, then Export PNG');
+  }
+
+  function queueRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(function () { renderQueued = false; render(); });
+  }
+
+  // Cyan dashed outline around the selected panel (editor only — never in
+  // bare-cover screenshot mode).
+  function drawSelection() {
+    if (document.body.classList.contains('cover-only')) return;
+    var ps = previewSize();
+    var lay = VC.layoutPanels(ps.w, ps.h, state.layout);
+    var r = lay.rects[state.selected];
+    if (!r) return;
+    var ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.setLineDash([10, 6]);
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function panelAt(clientX, clientY) {
+    var rect = canvas.getBoundingClientRect();
+    var x = (clientX - rect.left) * (canvas.width / rect.width);
+    var y = (clientY - rect.top) * (canvas.height / rect.height);
+    var lay = VC.layoutPanels(canvas.width, canvas.height, state.layout);
+    for (var i = 0; i < lay.rects.length; i++) {
+      var r = lay.rects[i];
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return i;
+    }
+    return -1;
+  }
+
+  function bindPointer() {
+    var drag = null;
+    canvas.addEventListener('pointerdown', function (ev) {
+      var i = panelAt(ev.clientX, ev.clientY);
+      if (i < 0) return;
+      state.selected = i;
+      syncRoleEditor();
+      drag = { panel: i, x: ev.clientX, y: ev.clientY,
+        fx: state.frames[i].x, fy: state.frames[i].y, moved: false };
+      canvas.setPointerCapture(ev.pointerId);
+      queueRender();
+    });
+    canvas.addEventListener('pointermove', function (ev) {
+      if (!drag) return;
+      var rect = canvas.getBoundingClientRect();
+      var dx = (ev.clientX - drag.x) * (canvas.width / rect.width);
+      var dy = (ev.clientY - drag.y) * (canvas.height / rect.height);
+      var r = VC.layoutPanels(canvas.width, canvas.height, state.layout).rects[drag.panel];
+      var f = state.frames[drag.panel];
+      f.x = clamp(drag.fx + dx / r.w, -0.45, 0.45);
+      f.y = clamp(drag.fy + dy / r.h, -0.45, 0.45);
+      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+      queueRender();
+    });
+    canvas.addEventListener('pointerup', function () { drag = null; });
+    canvas.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      var i = state.selected;
+      var f = state.frames[i];
+      f.z = clamp(f.z * (ev.deltaY < 0 ? 1.08 : 0.93), 1.0, 2.6);
+      queueRender();
+    }, { passive: false });
+  }
+
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  // ---- option grids -------------------------------------------------------
+
+  function buildLayouts() {
+    var wrap = $('layoutGrid');
+    VC.LAYOUTS.forEach(function (lay, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt layout-opt' + (i === state.layout ? ' on' : '');
+      b.title = lay.name;
+      b.innerHTML = '<span class="mini-grid">' +
+        lay.panels.map(function (pp, j) {
+          var hero = j === lay.hero ? ' hero' : '';
+          return '<span class="mini-cell' + hero + '" style="left:' + (pp[0] * 100) +
+            '%;top:' + (pp[1] * 100) + '%;width:' + (pp[2] * 100) +
+            '%;height:' + (pp[3] * 100) + '%"></span>';
+        }).join('') + '</span><span class="opt-name">' + lay.name + '</span>';
+      b.addEventListener('click', function () {
+        state.layout = i;
+        buildLayouts(); queueRender();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function buildGrades() {
+    var wrap = $('gradeGrid');
+    VC.GRADES.forEach(function (g, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt grade-opt' + (i === state.grade ? ' on' : '');
+      b.innerHTML = '<span class="swatch" style="background:linear-gradient(135deg,' +
+        g.stops[0] + ',' + g.stops[2] + ',' + g.stops[4] + ')"></span>' +
+        '<span class="opt-name">' + g.name + '</span>';
+      b.addEventListener('click', function () {
+        state.grade = i;
+        buildGrades(); queueRender();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function buildCaptions() {
+    var wrap = $('captionGrid');
+    VC.CAPTIONS.forEach(function (c, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt caption-opt' + (i === state.captionIdx ? ' on' : '');
+      b.innerHTML = '<span class="cap-title">' + c.title + '</span>' +
+        '<span class="cap-script">' + c.script + '</span>';
+      b.addEventListener('click', function () {
+        state.captionIdx = i;
+        state.caption = Object.assign({}, VC.CAPTIONS[i]);
+        syncCaptionInputs(); buildCaptions(); queueRender();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function buildSizes() {
+    var wrap = $('sizeRow');
+    VC.SIZES.forEach(function (s, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pill' + (i === state.sizeIdx ? ' on' : '');
+      b.textContent = s.label;
+      b.addEventListener('click', function () {
+        state.sizeIdx = i;
+        buildSizes(); fitCanvas(); queueRender();
+      });
+      wrap.appendChild(b);
+    });
+  }
+
+  function syncCaptionInputs() {
+    $('inTitle').value = state.caption.title || '';
+    $('inScript').value = state.caption.script || '';
+    $('inTagline').value = state.caption.tagline || '';
+    $('inLocation').value = state.caption.location || '';
+  }
+
+  function bindCaptionInputs() {
+    $('inTitle').addEventListener('input', function (ev) {
+      state.caption.title = ev.target.value.toUpperCase().slice(0, 24);
+      queueRender();
+    });
+    $('inScript').addEventListener('input', function (ev) {
+      state.caption.script = ev.target.value.slice(0, 32);
+      queueRender();
+    });
+    $('inTagline').addEventListener('input', function (ev) {
+      state.caption.tagline = ev.target.value.toUpperCase().slice(0, 60);
+      queueRender();
+    });
+    $('inLocation').addEventListener('input', function (ev) {
+      state.caption.location = ev.target.value.toUpperCase().slice(0, 40);
+      queueRender();
+    });
+  }
+
+  // ---- photos -------------------------------------------------------------
+
+  function loadImage(src) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { resolve(null); };
+      img.src = src;
+    });
+  }
+
+  function buildSamples() {
+    var wrap = $('sampleStrip');
+    wrap.innerHTML = '';
+    state.photos.forEach(function (img, li) {
+      if (!img) return;
+      var thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'thumb';
+      thumb.title = 'Drop into panel ' + (state.selected + 1);
+      var im = document.createElement('img');
+      im.src = img.src; im.alt = 'Sample photo ' + (li + 1);
+      thumb.appendChild(im);
+      thumb.addEventListener('click', function () {
+        state.assign[state.selected] = li;
+        state.frames[state.selected] = { z: 1.12, x: 0, y: 0 };
+        queueRender();
+      });
+      wrap.appendChild(thumb);
+    });
+  }
+
+  function bindUploads() {
+    $('fileInput').addEventListener('change', function (ev) {
+      var files = Array.prototype.slice.call(ev.target.files || []);
+      if (!files.length) return;
+      var readers = files.map(function (f) {
+        return new Promise(function (resolve) {
+          var rd = new FileReader();
+          rd.onload = function () { resolve(rd.result); };
+          rd.onerror = function () { resolve(null); };
+          rd.readAsDataURL(f);
+        });
+      });
+      Promise.all(readers).then(function (urls) {
+        var loads = urls.filter(Boolean).map(loadImage);
+        return Promise.all(loads);
+      }).then(function (imgs) {
+        imgs.filter(Boolean).forEach(function (img) {
+          state.photos.push(img);
+          if (state.photos.length > 24) state.photos.shift();
+          state.assign[state.selected] = state.photos.length - 1;
+        });
+        buildSamples(); queueRender();
+        setStatus(files.length + ' photo(s) loaded — nothing was uploaded.');
+      });
+      ev.target.value = '';
+    });
+    $('onePhotoBtn').addEventListener('click', function () {
+      var li = state.assign[state.selected];
+      for (var i = 0; i < 7; i++) state.assign[i] = li;
+      queueRender();
+      setStatus('One photo in every panel.');
+    });
+  }
+
+  // ---- role editor ----------------------------------------------------------
+
+  function syncRoleEditor() {
+    var sel = $('roleSelect');
+    var i = state.selected;
+    sel.value = state.roles[i];
+    $('roleSub').textContent = VC.ROLE_SUBS[state.roles[i]] || '';
+    $('panelLabel').textContent = 'Panel ' + (i + 1) + ' of 7';
+  }
+
+  function buildRoleEditor() {
+    var sel = $('roleSelect');
+    VC.ROLES.forEach(function (r) {
+      var o = document.createElement('option');
+      o.value = r; o.textContent = r;
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', function (ev) {
+      state.roles[state.selected] = ev.target.value;
+      syncRoleEditor(); queueRender();
+    });
+  }
+
+  // ---- shuffle / export -----------------------------------------------------
+
+  function shuffle() {
+    state.layout = Math.floor(Math.random() * VC.LAYOUTS.length);
+    state.grade = Math.floor(Math.random() * VC.GRADES.length);
+    state.captionIdx = Math.floor(Math.random() * VC.CAPTIONS.length);
+    state.caption = Object.assign({}, VC.CAPTIONS[state.captionIdx]);
+    var pool = state.photos.map(function (_, i) { return i; });
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    for (var k = 0; k < 7; k++) {
+      state.assign[k] = pool[k % pool.length];
+      state.frames[k] = { z: 1.05 + Math.random() * 0.35,
+        x: (Math.random() - 0.5) * 0.3, y: (Math.random() - 0.5) * 0.3 };
+    }
+    syncCaptionInputs(); buildLayouts(); buildGrades(); buildCaptions();
+    queueRender();
+    setStatus('Shuffled — layout, grade, caption and photos randomised.');
+  }
+
+  function exportSize(sizeIdx, done) {
+    var s = VC.SIZES[sizeIdx];
+    var off = document.createElement('canvas');
+    try {
+      VC.drawCover(off, coverState(), s.w, s.h);
+    } catch (err) {
+      setStatus('Export error: ' + err.message);
+      if (done) done();
+      return;
+    }
+    off.toBlob(function (blob) {
+      if (!blob) { setStatus('Export failed — browser blocked the PNG.'); if (done) done(); return; }
+      var a = document.createElement('a');
+      var name = 'vice-cover-' + s.name.toLowerCase() + '-' + s.w + 'x' + s.h + '.png';
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+        setStatus('Exported ' + name + ' — check your downloads.');
+        if (done) done();
+      }, 400);
+    }, 'image/png');
+  }
+
+  function bindActions() {
+    $('shuffleBtn').addEventListener('click', shuffle);
+    $('exportBtn').addEventListener('click', function () { exportSize(state.sizeIdx); });
+    $('exportAllBtn').addEventListener('click', function () {
+      var i = 0;
+      (function next() {
+        if (i >= VC.SIZES.length) return;
+        exportSize(i, function () { i++; setTimeout(next, 500); });
+      })();
+    });
+    $('zoomOutBtn').addEventListener('click', function () {
+      var f = state.frames[state.selected];
+      f.z = clamp(f.z * 0.9, 1.0, 2.6); queueRender();
+    });
+    $('zoomInBtn').addEventListener('click', function () {
+      var f = state.frames[state.selected];
+      f.z = clamp(f.z * 1.12, 1.0, 2.6); queueRender();
+    });
+    $('zoomResetBtn').addEventListener('click', function () {
+      state.frames[state.selected] = { z: 1.12, x: 0, y: 0 }; queueRender();
+    });
+  }
+
+  function fitCanvas() {
+    var ps = previewSize();
+    canvas.style.aspectRatio = ps.w + ' / ' + ps.h;
+  }
+
+  // Deterministic screenshot mode: ?shot=cover&size=wide&layout=0&grade=0&caption=0
+  // hides the editor chrome so a headless screenshot captures the bare cover.
+  function applyShotParams() {
+    var q = new URLSearchParams(window.location.search);
+    if (q.has('layout')) state.layout = clamp(parseInt(q.get('layout'), 10) || 0, 0, 7);
+    if (q.has('grade')) state.grade = clamp(parseInt(q.get('grade'), 10) || 0, 0, 5);
+    if (q.has('caption')) {
+      state.captionIdx = clamp(parseInt(q.get('caption'), 10) || 0, 0, 5);
+      state.caption = Object.assign({}, VC.CAPTIONS[state.captionIdx]);
+    }
+    if (q.has('size')) {
+      var names = VC.SIZES.map(function (s) { return s.name.toLowerCase(); });
+      var si = names.indexOf((q.get('size') || '').toLowerCase());
+      if (si >= 0) state.sizeIdx = si;
+    }
+    if (q.get('shot') === 'cover') {
+      document.body.classList.add('cover-only');
+      var s = VC.SIZES[state.sizeIdx];
+      canvas.style.width = '100vw';
+      canvas.style.height = '100vh';
+      canvas.style.aspectRatio = 'auto';
     }
   }
-  photos.push(...loaded);
-  resetPanels([0, 1, 2, 3, 4, 5]);
-  renderPhotoStrip();
-  queueRender();
-}
 
-function renderPhotoStrip() {
-  const strip = $('photoStrip');
-  strip.innerHTML = '';
-  photos.forEach((img, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'thumb';
-    btn.type = 'button';
-    btn.title = 'Use this photo in the selected panel';
-    const thumb = document.createElement('img');
-    thumb.src = img.src;
-    thumb.alt = 'Photo ' + (i + 1);
-    btn.appendChild(thumb);
-    const tag = document.createElement('span');
-    tag.textContent = i < SAMPLES.length ? SAMPLES[i].name : 'Upload ' + (i - SAMPLES.length + 1);
-    btn.appendChild(tag);
-    btn.addEventListener('click', () => {
-      state.panels[state.selectedPanel].photo = img;
-      queueRender();
-      flashStatus('Photo placed in panel ' + (state.selectedPanel + 1));
+  function boot() {
+    canvas = $('coverCanvas');
+    statusEl = $('status');
+    applyShotParams();
+    buildLayouts(); buildGrades(); buildCaptions(); buildSizes();
+    buildRoleEditor(); bindCaptionInputs(); bindUploads(); bindActions();
+    bindPointer(); syncCaptionInputs(); syncRoleEditor(); fitCanvas();
+    VC.ensureFonts().then(function () {
+      return Promise.all(SAMPLE_URLS.map(loadImage));
+    }).then(function (imgs) {
+      state.photos = imgs;
+      buildSamples();
+      render();
+    }).catch(function () {
+      state.photos = [];
+      buildSamples();
+      render();
     });
-    strip.appendChild(btn);
-  });
-}
-
-function handleUpload(files) {
-  const list = Array.from(files || []).filter((f) => f.type.startsWith('image/'));
-  if (!list.length) return;
-  let pending = list.length;
-  list.forEach((file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      loadImage(reader.result)
-        .then((img) => {
-          photos.push(img);
-          renderPhotoStrip();
-          state.panels[state.selectedPanel].photo = img;
-          queueRender();
-        })
-        .catch(() => flashStatus('Could not read ' + file.name))
-        .finally(() => {
-          pending -= 1;
-          if (pending === 0) flashStatus(list.length + ' photo(s) added — stored only on this machine');
-        });
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-// ---- Controls ------------------------------------------------------------
-
-function buildLayoutPicker() {
-  const wrap = $('layoutPicker');
-  LAYOUTS.forEach((layout, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'layout-btn' + (i === state.layout ? ' active' : '');
-    btn.type = 'button';
-    btn.title = layout.name;
-    const mini = document.createElement('span');
-    mini.className = 'layout-mini';
-    layout.panels.forEach((p) => {
-      const cell = document.createElement('i');
-      cell.style.left = p.x * 100 + '%';
-      cell.style.top = p.y * 100 + '%';
-      cell.style.width = p.w * 100 + '%';
-      cell.style.height = p.h * 100 + '%';
-      if (layout.panels.indexOf(p) === layout.hero) cell.classList.add('hero');
-      mini.appendChild(cell);
+    window.addEventListener('error', function (ev) {
+      setStatus('Error: ' + (ev.message || 'unknown'));
     });
-    btn.appendChild(mini);
-    const label = document.createElement('span');
-    label.className = 'layout-name';
-    label.textContent = layout.name;
-    btn.appendChild(label);
-    btn.addEventListener('click', () => {
-      const oldPhotos = state.panels.map((p) => p.photo);
-      state.layout = i;
-      state.panels = layoutPanels().map((panel, k) => ({
-        photo: oldPhotos[k % oldPhotos.length] || null,
-        zoom: 1,
-        ox: 0,
-        oy: 0,
-        label: panel.label,
-      }));
-      state.selectedPanel = LAYOUTS[i].hero;
-      document.querySelectorAll('.layout-btn').forEach((b, k) => b.classList.toggle('active', k === i));
-      queueRender();
-    });
-    wrap.appendChild(btn);
-  });
-}
-
-function buildGradePicker() {
-  const wrap = $('gradePicker');
-  GRADES.forEach((grade, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'grade-btn' + (i === state.grade ? ' active' : '');
-    btn.type = 'button';
-    const sw = document.createElement('span');
-    sw.className = 'grade-sw';
-    sw.style.background = `linear-gradient(135deg, ${grade.titleStops[0]}, ${grade.titleStops[2]}, ${grade.titleStops[3]})`;
-    btn.appendChild(sw);
-    const label = document.createElement('span');
-    label.textContent = grade.name;
-    btn.appendChild(label);
-    btn.addEventListener('click', () => {
-      state.grade = i;
-      document.querySelectorAll('.grade-btn').forEach((b, k) => b.classList.toggle('active', k === i));
-      queueRender();
-    });
-    wrap.appendChild(btn);
-  });
-}
-
-function buildCaptionPicker() {
-  const wrap = $('captionPicker');
-  CAPTIONS.forEach((cap, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'caption-btn' + (i === state.caption ? ' active' : '');
-    btn.type = 'button';
-    btn.innerHTML = '';
-    const title = document.createElement('b');
-    title.textContent = cap.title;
-    const sub = document.createElement('span');
-    sub.textContent = cap.subtitle;
-    btn.appendChild(title);
-    btn.appendChild(sub);
-    btn.addEventListener('click', () => {
-      applyCaption(i);
-    });
-    wrap.appendChild(btn);
-  });
-}
-
-function applyCaption(i) {
-  const cap = CAPTIONS[i];
-  state.caption = i;
-  state.title = cap.title;
-  state.subtitle = cap.subtitle;
-  state.tagline = cap.tagline;
-  state.quote = cap.quote;
-  state.quoteSource = cap.source;
-  $('titleInput').value = cap.title;
-  $('subtitleInput').value = cap.subtitle;
-  $('taglineInput').value = cap.tagline;
-  document.querySelectorAll('.caption-btn').forEach((b, k) => b.classList.toggle('active', k === i));
-  queueRender();
-}
-
-function buildSizePicker() {
-  const wrap = $('sizePicker');
-  EXPORT_SIZES.forEach((size) => {
-    const btn = document.createElement('button');
-    btn.className = 'size-btn' + (size.id === state.size ? ' active' : '');
-    btn.type = 'button';
-    btn.textContent = size.label;
-    btn.addEventListener('click', () => {
-      state.size = size.id;
-      document.querySelectorAll('.size-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      queueRender();
-    });
-    wrap.appendChild(btn);
-  });
-}
-
-function updatePanelInspector() {
-  const panel = state.panels[state.selectedPanel];
-  if (!panel) return;
-  $('panelName').textContent = 'Panel ' + (state.selectedPanel + 1) + ' — ' + (panel.label || 'Untitled');
-  $('labelInput').value = panel.label || '';
-  $('zoomSlider').value = Math.round(panel.zoom * 100);
-  $('zoomValue').textContent = Math.round(panel.zoom * 100) + '%';
-}
-
-function shuffleAll() {
-  const order = photos.map((_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
   }
-  state.layout = Math.floor(Math.random() * LAYOUTS.length);
-  state.grade = Math.floor(Math.random() * GRADES.length);
-  applyCaption(Math.floor(Math.random() * CAPTIONS.length));
-  document.querySelectorAll('.layout-btn').forEach((b, k) => b.classList.toggle('active', k === state.layout));
-  document.querySelectorAll('.grade-btn').forEach((b, k) => b.classList.toggle('active', k === state.grade));
-  resetPanels(order);
-  queueRender();
-  flashStatus('Shuffled — new layout, grade, caption and photo order');
-}
 
-let statusTimer = null;
-function flashStatus(msg) {
-  const el = $('statusLine');
-  el.textContent = msg;
-  el.classList.add('live');
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => el.classList.remove('live'), 2600);
-}
-
-// ---- Export ---------------------------------------------------------------
-
-async function exportPng() {
-  const size = EXPORT_SIZES.find((s) => s.id === state.size) || EXPORT_SIZES[2];
-  const t0 = performance.now();
-  const off = document.createElement('canvas');
-  off.width = size.w;
-  off.height = size.h;
-  drawCover(off.getContext('2d'), state, size.w, size.h);
-  const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
-  if (!blob) {
-    flashStatus('Export failed — please try again');
-    return;
-  }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `vice-cover-${size.w}x${size.h}.png`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  const secs = ((performance.now() - t0) / 1000).toFixed(1);
-  flashStatus(`Exported ${size.w} × ${size.h} PNG in ${secs}s — ready to post`);
-  $('lastExport').textContent = `Last export: ${size.label} · ${(blob.size / 1024).toFixed(0)} KB`;
-}
-
-async function exportAllSizes() {
-  for (const size of EXPORT_SIZES) {
-    const off = document.createElement('canvas');
-    off.width = size.w;
-    off.height = size.h;
-    drawCover(off.getContext('2d'), state, size.w, size.h);
-    const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
-    if (!blob) continue;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vice-cover-${size.w}x${size.h}.png`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    await new Promise((r) => setTimeout(r, 350));
-  }
-  flashStatus('Exported all 4 sizes');
-}
-
-// ---- Pointer: click to select, drag to pan, wheel to zoom ----------------
-
-let drag = null;
-
-canvas.addEventListener('pointerdown', (e) => {
-  const i = panelAt(e.clientX, e.clientY);
-  if (i < 0) return;
-  state.selectedPanel = i;
-  drag = { x: e.clientX, y: e.clientY, ox: state.panels[i].ox, oy: state.panels[i].oy, moved: false };
-  canvas.setPointerCapture(e.pointerId);
-  queueRender();
-});
-
-canvas.addEventListener('pointermove', (e) => {
-  if (!drag) return;
-  const rect = canvas.getBoundingClientRect();
-  const panel = state.panels[state.selectedPanel];
-  const dx = (e.clientX - drag.x) / rect.width;
-  const dy = (e.clientY - drag.y) / rect.height;
-  if (Math.abs(dx) + Math.abs(dy) > 0.004) drag.moved = true;
-  panel.ox = Math.max(-1, Math.min(1, drag.ox + dx * 2.2));
-  panel.oy = Math.max(-1, Math.min(1, drag.oy + dy * 2.2));
-  queueRender();
-});
-
-canvas.addEventListener('pointerup', () => {
-  drag = null;
-});
-
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  const panel = state.panels[state.selectedPanel];
-  if (!panel) return;
-  const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-  panel.zoom = Math.max(1, Math.min(3, panel.zoom * factor));
-  queueRender();
-}, { passive: false });
-
-// ---- Boot -----------------------------------------------------------------
-
-function bindControls() {
-  $('uploadInput').addEventListener('change', (e) => handleUpload(e.target.files));
-  $('shuffleBtn').addEventListener('click', shuffleAll);
-  $('exportBtn').addEventListener('click', exportPng);
-  $('exportAllBtn').addEventListener('click', exportAllSizes);
-  $('titleInput').addEventListener('input', (e) => {
-    state.title = e.target.value.toUpperCase();
-    queueRender();
-  });
-  $('subtitleInput').addEventListener('input', (e) => {
-    state.subtitle = e.target.value;
-    queueRender();
-  });
-  $('taglineInput').addEventListener('input', (e) => {
-    state.tagline = e.target.value.toUpperCase();
-    queueRender();
-  });
-  $('labelInput').addEventListener('input', (e) => {
-    state.panels[state.selectedPanel].label = e.target.value.toUpperCase();
-    queueRender();
-  });
-  $('zoomSlider').addEventListener('input', (e) => {
-    state.panels[state.selectedPanel].zoom = Number(e.target.value) / 100;
-    queueRender();
-  });
-  $('resetPanelBtn').addEventListener('click', () => {
-    const panel = state.panels[state.selectedPanel];
-    panel.zoom = 1;
-    panel.ox = 0;
-    panel.oy = 0;
-    queueRender();
-    flashStatus('Panel framing reset');
-  });
-  $('onePhotoBtn').addEventListener('click', () => {
-    const photo = state.panels[state.selectedPanel].photo;
-    if (!photo) return;
-    state.panels.forEach((p) => {
-      p.photo = photo;
-    });
-    queueRender();
-    flashStatus('One photo now fills every panel');
-  });
-  $('volumeInput').addEventListener('input', (e) => {
-    state.volume = e.target.value.toUpperCase() || 'VOL. 1';
-    queueRender();
-  });
-}
-
-async function boot() {
-  buildLayoutPicker();
-  buildGradePicker();
-  buildCaptionPicker();
-  buildSizePicker();
-  bindControls();
-  $('titleInput').value = state.title;
-  $('subtitleInput').value = state.subtitle;
-  $('taglineInput').value = state.tagline;
-  try {
-    await document.fonts.load('400 80px Anton');
-    await document.fonts.load('400 40px Pacifico');
-    await document.fonts.load('600 20px Oswald');
-    await document.fonts.ready;
-  } catch (err) {
-    console.warn('Font preload skipped:', err);
-  }
-  await loadSamples();
-  flashStatus('Ready — drag any panel to reframe it, then Export PNG');
-}
-
-document.addEventListener('DOMContentLoaded', boot);
+  document.addEventListener('DOMContentLoaded', boot);
+})();
