@@ -1,42 +1,33 @@
-// Vice Cover Studio — tiny static server for trying the app locally.
-// Serves app/ at http://localhost:8080 with no build step and no network
-// use of its own. Run: node serve.ts
-
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+// Tiny static server for trying Vice Cover Studio locally.
+// Serves app/ at http://localhost:8080 — no build step, no network.
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), 'app');
-
 const types = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.ttf': 'font/ttf',
-  '.txt': 'text/plain; charset=utf-8',
+  '.txt': 'text/plain',
 };
 
-const server = createServer(async (req, res) => {
+const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   const file = join(root, path === '/' ? 'index.html' : path);
-  if (!file.startsWith(root)) {
-    res.writeHead(403);
-    res.end('forbidden');
+  if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
+    res.end('Not found\n');
     return;
   }
-  try {
-    const data = await readFile(file);
-    res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream' });
-    res.end(data);
-  } catch {
-    res.writeHead(404);
-    res.end('not found');
-  }
+  res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' });
+  createReadStream(file).pipe(res);
 });
 
 server.listen(8080, () => {

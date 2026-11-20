@@ -3,87 +3,88 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
-<title>Vice Cover Studio — turn your photos into GTA-style cover art</title>
+<title>Vice Cover Studio — GTA-style cover art maker</title>
+<meta name="description" content="Turn your photo and a caption into multi-panel GTA-style cover art with a Vice City sunset grade, then export it as a PNG. Works offline; photos never leave your machine.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a0b2e'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='%23ffd98a' font-family='sans-serif' font-weight='bold'%3EV%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">VC</span>
-    <div>
-      <h1>VICE COVER STUDIO</h1>
-      <p>Your photos, turned into a movie-poster cover. 100% offline.</p>
-    </div>
-  </div>
-  <div class="top-actions">
-    <button id="shuffleBtn" class="btn ghost" title="Random layout, grade, caption and photo order">🎲 Shuffle</button>
-    <button id="loadSamplesBtn" class="btn ghost" title="Fill every panel with the bundled sample photos">Load sample set</button>
-    <button id="exportBtn" class="btn primary">⬇ Export PNG</button>
-  </div>
+  <h1 class="logo">VICE COVER STUDIO</h1>
+  <span class="logo-sub">your photo, one last summer</span>
+  <span class="privacy-badge">Offline &middot; photos stay on your machine</span>
 </header>
 
-<main class="studio">
-  <section class="preview-pane">
-    <div class="preview-wrap">
-      <canvas id="previewCanvas" width="1920" height="1080"></canvas>
-    </div>
-    <p class="hint" id="sizeNote">Wide 1920 × 1080 · live preview</p>
-    <p class="hint">Click a panel to select it · drag on the preview to move its photo · scroll over it to zoom</p>
-  </section>
-
+<main class="workspace">
   <aside class="controls">
     <section class="card">
-      <h2>1 · Photos</h2>
-      <p class="card-note">One photo per panel. Upload your own, or cycle the bundled samples. Drag a photo on the preview to reposition it.</p>
-      <div id="panelList"></div>
-      <input type="file" id="fileInput" accept="image/*" hidden>
+      <h2><span class="step">1</span> Photos</h2>
+      <label class="btn" for="uploadInput" style="display:block;text-align:center">+ Add your photos</label>
+      <input type="file" id="uploadInput" accept="image/*" multiple hidden>
+      <p class="hint">Six sample photos are loaded already — click one below to drop it into the selected panel, or add your own. Nothing is uploaded.</p>
+      <button class="btn btn-ghost" id="onePhotoBtn" type="button">One photo in every panel</button>
     </section>
 
     <section class="card">
-      <h2>2 · Layout</h2>
-      <div id="layoutBtns" class="btn-grid"></div>
+      <h2><span class="step">2</span> Layout</h2>
+      <div class="layout-grid" id="layoutPicker"></div>
     </section>
 
     <section class="card">
-      <h2>3 · Colour grade</h2>
-      <div id="gradeBtns" class="btn-grid"></div>
+      <h2><span class="step">3</span> Colour grade</h2>
+      <div class="grade-grid" id="gradePicker"></div>
     </section>
 
     <section class="card">
-      <h2>4 · Caption</h2>
-      <label class="field">Preset
-        <select id="captionSelect"></select>
-      </label>
-      <div class="field-row">
-        <label class="field">Title line 1 <input id="inTitle1" type="text" maxlength="12"></label>
-        <label class="field">Title line 2 <input id="inTitle2" type="text" maxlength="12"></label>
+      <h2><span class="step">4</span> Caption</h2>
+      <div class="caption-grid" id="captionPicker"></div>
+      <label class="field" for="titleInput">Title</label>
+      <input type="text" id="titleInput" maxlength="24" value="PALM FEVER" autocomplete="off">
+      <label class="field" for="subtitleInput">Script subtitle</label>
+      <input type="text" id="subtitleInput" maxlength="32" value="one last summer" autocomplete="off">
+      <label class="field" for="taglineInput">Tagline</label>
+      <input type="text" id="taglineInput" maxlength="48" value="FIVE FRIENDS · ONE COAST · NO WAY BACK" autocomplete="off">
+      <label class="field" for="volumeInput">Volume badge</label>
+      <input type="text" id="volumeInput" maxlength="12" value="VOL. 1" autocomplete="off">
+    </section>
+
+    <section class="card">
+      <h2><span class="step">5</span> Selected panel</h2>
+      <div class="panel-head"><span id="panelName">Panel 1</span><button class="mini-btn" id="resetPanelBtn" type="button">Reset framing</button></div>
+      <p class="hint">Click a panel on the cover to select it. Drag it to pan, scroll to zoom.</p>
+      <label class="field" for="labelInput">Panel label</label>
+      <input type="text" id="labelInput" maxlength="18" value="THE CAPTAIN" autocomplete="off">
+      <label class="field" for="zoomSlider">Zoom</label>
+      <div class="zoom-row">
+        <input type="range" id="zoomSlider" min="100" max="300" value="100">
+        <span id="zoomValue">100%</span>
       </div>
-      <label class="field">Script line <input id="inScript" type="text" maxlength="40"></label>
-      <label class="field">Tagline <input id="inTagline" type="text" maxlength="60"></label>
-      <div class="field-row">
-        <label class="field">Press quote <input id="inQuote" type="text" maxlength="40"></label>
-        <label class="field">Press source <input id="inSource" type="text" maxlength="30"></label>
-      </div>
-      <div class="field-row">
-        <label class="field">Volume <input id="inVol" type="text" maxlength="14"></label>
-        <label class="field">Credit line <input id="inCredit" type="text" maxlength="110"></label>
-      </div>
-      <label class="check"><input id="chkSeal" type="checkbox" checked> Gold “Original Cover Art” seal</label>
-      <label class="check"><input id="chkComing" type="checkbox" checked> “Coming soon” in the credit bar</label>
     </section>
 
-    <section class="card">
-      <h2>5 · Export size</h2>
-      <div id="sizeBtns" class="btn-grid"></div>
-      <p class="card-note">Export writes an exact-size PNG: 1080 × 1080, 1080 × 1350, 1920 × 1080 or 1080 × 1920. Photos never leave your machine.</p>
-    </section>
+    <button class="btn btn-shuffle" id="shuffleBtn" type="button">🎲 Shuffle — new cover in one click</button>
   </aside>
+
+  <section class="stage">
+    <div class="stage-head">
+      <h2>Live cover preview</h2>
+      <span id="statusLine">Loading sample photos…</span>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="coverCanvas" width="960" height="540" aria-label="Cover art preview"></canvas>
+    </div>
+    <div class="size-row" id="sizePicker" role="group" aria-label="Export size"></div>
+    <div class="export-row">
+      <button class="btn btn-primary" id="exportBtn" type="button">⬇ Export PNG</button>
+      <button class="btn btn-ghost" id="exportAllBtn" type="button">Export all 4 sizes</button>
+      <span id="lastExport"></span>
+    </div>
+    <div class="photo-strip" id="photoStrip" aria-label="Photo library"></div>
+  </section>
 </main>
 
 <footer class="foot">
-  <span>Vice Cover Studio — an original cover maker. No Rockstar Games logo, artwork or fonts.</span>
-  <span>Lettering: Anton, Archivo Black &amp; Pacifico (SIL Open Font License). Sample photos: AI-generated, bundled with the app.</span>
+  Vice Cover Studio makes original cover art in the style of GTA 6 posters — multi-panel layouts, bold lettering and a Vice City sunset grade.<br>
+  All lettering, layouts and photos are original. No Rockstar Games logo, artwork or fonts are used. Fonts: Anton, Pacifico and Oswald under the SIL Open Font License.
 </footer>
 
 <script type="module" src="src/main.js"></script>
