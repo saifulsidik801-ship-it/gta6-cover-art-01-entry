@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Vice Cover Studio — turn your photos into GTA-style cover art</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">VC</span>
+    <div>
+      <h1>VICE COVER STUDIO</h1>
+      <p>Your photos, turned into a movie-poster cover. 100% offline.</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="shuffleBtn" class="btn ghost" title="Random layout, grade, caption and photo order">🎲 Shuffle</button>
+    <button id="loadSamplesBtn" class="btn ghost" title="Fill every panel with the bundled sample photos">Load sample set</button>
+    <button id="exportBtn" class="btn primary">⬇ Export PNG</button>
+  </div>
+</header>
+
+<main class="studio">
+  <section class="preview-pane">
+    <div class="preview-wrap">
+      <canvas id="previewCanvas" width="1920" height="1080"></canvas>
+    </div>
+    <p class="hint" id="sizeNote">Wide 1920 × 1080 · live preview</p>
+    <p class="hint">Click a panel to select it · drag on the preview to move its photo · scroll over it to zoom</p>
+  </section>
+
+  <aside class="controls">
+    <section class="card">
+      <h2>1 · Photos</h2>
+      <p class="card-note">One photo per panel. Upload your own, or cycle the bundled samples. Drag a photo on the preview to reposition it.</p>
+      <div id="panelList"></div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </section>
+
+    <section class="card">
+      <h2>2 · Layout</h2>
+      <div id="layoutBtns" class="btn-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>3 · Colour grade</h2>
+      <div id="gradeBtns" class="btn-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>4 · Caption</h2>
+      <label class="field">Preset
+        <select id="captionSelect"></select>
+      </label>
+      <div class="field-row">
+        <label class="field">Title line 1 <input id="inTitle1" type="text" maxlength="12"></label>
+        <label class="field">Title line 2 <input id="inTitle2" type="text" maxlength="12"></label>
+      </div>
+      <label class="field">Script line <input id="inScript" type="text" maxlength="40"></label>
+      <label class="field">Tagline <input id="inTagline" type="text" maxlength="60"></label>
+      <div class="field-row">
+        <label class="field">Press quote <input id="inQuote" type="text" maxlength="40"></label>
+        <label class="field">Press source <input id="inSource" type="text" maxlength="30"></label>
+      </div>
+      <div class="field-row">
+        <label class="field">Volume <input id="inVol" type="text" maxlength="14"></label>
+        <label class="field">Credit line <input id="inCredit" type="text" maxlength="110"></label>
+      </div>
+      <label class="check"><input id="chkSeal" type="checkbox" checked> Gold “Original Cover Art” seal</label>
+      <label class="check"><input id="chkComing" type="checkbox" checked> “Coming soon” in the credit bar</label>
+    </section>
+
+    <section class="card">
+      <h2>5 · Export size</h2>
+      <div id="sizeBtns" class="btn-grid"></div>
+      <p class="card-note">Export writes an exact-size PNG: 1080 × 1080, 1080 × 1350, 1920 × 1080 or 1080 × 1920. Photos never leave your machine.</p>
+    </section>
+  </aside>
+</main>
+
+<footer class="foot">
+  <span>Vice Cover Studio — an original cover maker. No Rockstar Games logo, artwork or fonts.</span>
+  <span>Lettering: Anton, Archivo Black &amp; Pacifico (SIL Open Font License). Sample photos: AI-generated, bundled with the app.</span>
+</footer>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
